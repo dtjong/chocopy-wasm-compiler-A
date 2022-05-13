@@ -27,26 +27,34 @@ export function lowerProgram(p : AST.Program<Type>, env : GlobalEnv) : IR.Progra
     var firstBlock : IR.BasicBlock<Type> = {  a: p.a, label: generateName("$startProg"), stmts: [] }
     blocks.push(firstBlock);
     var classes = lowerClasses(p.classes, env);
-    var [inits, generatedClasses] = flattenStmts(p.stmts, blocks, env);
+    var [inits, sclasses] = flattenStmts(p.stmts, blocks, env);
+    var [fdefs, fclasses] = lowerFunDefs(p.funs, env)
     return {
         a: p.a,
-        funs: lowerFunDefs(p.funs, env),
+        funs: fdefs,
         inits: [...inits, ...lowerVarInits(p.inits, env)],
-        classes: [...classes, ...generatedClasses],
+        classes: [...classes, ...sclasses, ...fclasses],
         body: blocks
     }
 }
 
-function lowerFunDefs(fs : Array<AST.FunDef<Type>>, env : GlobalEnv) : Array<IR.FunDef<Type>> {
-    return fs.map(f => lowerFunDef(f, env)).flat();
+function lowerFunDefs(fs : Array<AST.FunDef<Type>>, env : GlobalEnv) : [Array<IR.FunDef<Type>>, Array<IR.Class<Type>>] {
+    let fdefs: Array<IR.FunDef<Type>> = [];
+    let classes: Array<IR.Class<Type>> = [];
+    fs.forEach(f => {
+      let [fdef, gclasses] = lowerFunDef(f, env);
+      fdefs.push(fdef);
+      classes.push(...gclasses);
+    });
+    return [fdefs, classes];
 }
 
-function lowerFunDef(f : AST.FunDef<Type>, env : GlobalEnv) : IR.FunDef<Type> {
+function lowerFunDef(f : AST.FunDef<Type>, env : GlobalEnv) : [IR.FunDef<Type>, Array<IR.Class<Type>>] {
   var blocks : Array<IR.BasicBlock<Type>> = [];
   var firstBlock : IR.BasicBlock<Type> = {  a: f.a, label: generateName("$startFun"), stmts: [] }
   blocks.push(firstBlock);
-  var [bodyinits, _] = flattenStmts(f.body, blocks, env);
-    return {...f, inits: [...bodyinits, ...lowerVarInits(f.inits, env)], body: blocks}
+  var [bodyinits, classes] = flattenStmts(f.body, blocks, env);
+    return [{...f, inits: [...bodyinits, ...lowerVarInits(f.inits, env)], body: blocks}, classes]
 }
 
 function lowerVarInits(inits: Array<AST.VarInit<Type>>, env: GlobalEnv) : Array<IR.VarInit<Type>> {
@@ -61,21 +69,22 @@ function lowerVarInit(init: AST.VarInit<Type>, env: GlobalEnv) : IR.VarInit<Type
 }
 
 function lowerClasses(classes: Array<AST.Class<Type>>, env : GlobalEnv) : Array<IR.Class<Type>> {
-    return classes.map(c => lowerClass(c, env));
+    return classes.map(c => lowerClass(c, env)).flat();
 }
 
-function lowerClass(cls: AST.Class<Type>, env : GlobalEnv) : IR.Class<Type> {
+function lowerClass(cls: AST.Class<Type>, env : GlobalEnv) : Array<IR.Class<Type>> {
     env.classIndices.set(cls.name, env.vtableMethods.length);
     // init not in vtable 
     // (we currently do no reordering, we leave that to inheritance team)
     env.vtableMethods.push(...cls.methods
       .filter(method => !method.name.includes("__init__"))
       .map((method): [string, number] => [createMethodName(cls.name, method.name), method.parameters.length]));
-    return {
+    let [fdefs, classes] = lowerFunDefs(cls.methods, env);
+    return [{
         ...cls,
         fields: lowerVarInits(cls.fields, env),
-        methods: lowerFunDefs(cls.methods, env)
-    }
+        methods: fdefs
+    }, ...classes]
 }
 
 function literalToVal(lit: AST.Literal) : IR.Value<Type> {
@@ -319,11 +328,12 @@ function flattenExprToExpr(e : AST.Expr<Type>, env : GlobalEnv) : [Array<IR.VarI
       classDef.fields.forEach((field, i) => classFields.set(field.name, [i, field.value]));
       env.classes.set(classDef.name, classFields);
       const irClass = lowerClass(classDef, env);
-      irClass.a = e.a;
+      irClass[0].a = e.a;
 
       const [cinits, cstmts, cval, cclasses] = flattenExprToExpr(constrExpr, env);
+      console.error("ca", cclasses);
 
-      return [cinits, cstmts, cval, [irClass, ...cclasses]]
+      return [cinits, cstmts, cval, [...irClass, ...cclasses]]
   }
 }
 

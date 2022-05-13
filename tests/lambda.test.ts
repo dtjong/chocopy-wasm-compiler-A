@@ -11,7 +11,7 @@ import {
 import { emptyGlobalTypeEnv, tc } from "../type-check";
 import { assert } from "console";
 import { importObject } from "./import-object.test";
-import {run, typeCheck} from "./helpers.test";
+import { run, typeCheck } from "./helpers.test";
 
 // We write tests for each function in parser.ts here. Each function gets its
 // own describe statement. Each it statement represents a single test. You
@@ -141,7 +141,9 @@ describe("traverseType(c, s) function", () => {
     });
 
     it("nested lambda", async () => {
-      await run("mklambda(Callable[[], Callable[[], int]], lambda: mklambda(Callable[[], int], lambda: print(5)))()()");
+      await run(
+        "mklambda(Callable[[], Callable[[], int]], lambda: mklambda(Callable[[], int], lambda: print(5)))()()"
+      );
       console.error(importObject.output);
     });
 
@@ -153,6 +155,57 @@ describe("traverseType(c, s) function", () => {
         print(6)
       `);
       console.error(importObject.output);
+    });
+
+    it("assign func", async () => {
+      const source = `
+      def a(b: int, c: bool) -> bool:
+        print(b)
+        print(c)
+        return False
+      f: Callable[[int, bool], bool] = None
+      f = a
+      f(4, True)
+      `;
+
+      const cursor = parser.parse(source).cursor();
+      const prog = traverse(cursor, source);
+      tc(emptyGlobalTypeEnv(), prog);
+      console.error(importObject.output);
+
+      expect(() => {
+        const source = `
+        def a(b: int, c: int) -> bool:
+          print(b)
+          print(c)
+          return False
+        f: Callable[[int, bool], bool] = None
+        f = a
+        f(4, True)
+        `;
+
+        const cursor = parser.parse(source).cursor();
+        const prog = traverse(cursor, source);
+        tc(emptyGlobalTypeEnv(), prog);
+        console.error(importObject.output);
+      }).throws();
+
+      expect(() => {
+        const source = `
+        def a(b: int, c: bool) -> bool:
+          print(b)
+          print(c)
+          return False
+        f: Callable[[int, bool], bool] = None
+        f = a
+        f(4, 9)
+        `;
+
+        const cursor = parser.parse(source).cursor();
+        const prog = traverse(cursor, source);
+        tc(emptyGlobalTypeEnv(), prog);
+        console.error(importObject.output);
+      }).throws();
     });
   });
 });

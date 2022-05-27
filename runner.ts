@@ -51,6 +51,7 @@ export function augmentEnv(env: GlobalEnv, prog: Program<Annotation>) : GlobalEn
   const newClasses = new Map(env.classes);
   const newClassIndices = new Map(env.classIndices);
   const functionNames = new Map(env.functionNames);
+  const closureEnv = new Map(env.closureEnv);
 
   var newOffset = env.offset;
   prog.inits.forEach((v) => {
@@ -74,6 +75,7 @@ export function augmentEnv(env: GlobalEnv, prog: Program<Annotation>) : GlobalEn
     classes: newClasses,
     classIndices: newClassIndices,
     functionNames,
+    closureEnv,
     locals: env.locals,
     labels: env.labels,
     offset: newOffset,

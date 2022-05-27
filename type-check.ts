@@ -362,7 +362,8 @@ export function tcInit(env: GlobalTypeEnv, init: VarInit<Annotation>, SRC: strin
 }
 
 export function tcDef(env : GlobalTypeEnv, fun : FunDef<Annotation>, nonlocalEnv: NonlocalTypeEnv, SRC: string) : FunDef<Annotation> {
-  var locals = emptyLocalTypeEnv();
+  // TODO(pashabou): need to keep nonlocalEnv separate from env to type-check `nonlocal` inits
+  var locals: LocalTypeEnv = { ...emptyLocalTypeEnv(), vars: new Map(nonlocalEnv) };
   locals.vars.set(fun.name, CALLABLE(fun.parameters.map(x => x.type), fun.ret));
   locals.expectedRet = fun.ret;
   locals.topLevel = false;

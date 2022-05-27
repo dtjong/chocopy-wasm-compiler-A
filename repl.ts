@@ -31,6 +31,7 @@ export class BasicREPL {
       classes: new Map(),
       classIndices: new Map(),
       functionNames: new Map(),
+      closureEnv: new Map(),
       locals: new Set(),
       labels: [],
       offset: 1,

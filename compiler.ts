@@ -7,6 +7,7 @@ export type GlobalEnv = {
   classes: Map<string, Map<string, [number, Value<Annotation>]>>;  
   classIndices: Map<string, number>;
   functionNames: Map<string, string>;
+  closureEnv: Map<string, Map<string, number>>;
   locals: Set<string>;
   labels: Array<string>;
   offset: number;
@@ -18,6 +19,7 @@ export const emptyEnv : GlobalEnv = {
   classes: new Map(),
   classIndices: new Map(), 
   functionNames: new Map(),
+  closureEnv: new Map(),
   locals: new Set(),
   labels: [],
   offset: 0,

@@ -69,39 +69,59 @@ function lowerFunDef(
   var type: Type = CLASS(name);
   var self: AST.Parameter<Annotation> = { name: "self", type };
 
-  var envCopy = { ...env, functionNames: new Map(env.functionNames) };
-  f.children.forEach(c => envCopy.functionNames.set(c.name, closureName(c.name, [f, ...ancestors])));
+  // TODO(closures): determine free non-global variables in function, keep track of local variables and
+  // their defining scopes in new env field, replace id's with references to parent fields
+  // or appropriate closure constructors
 
-  var defs = f.children.map(x => lowerFunDef(x, envCopy, [f, ...ancestors]));
-  var assignStmt: AST.Stmt<Annotation> = { tag: "assign", name: f.name, value: { a: { type }, tag: "construct", name } }
-  var varInit: AST.VarInit<Annotation> = { name: f.name, type, value: { tag: "none" } }
-  // TODO(pashabou): children, populate fields and methods of closure class
+  // promote parameters and inits to instance fields
+  // TODO(closures): promote only necessary variables?
+  const fields: Array<AST.VarInit<Annotation>> = [
+    ...f.parameters.map((x): AST.VarInit<Annotation> => ({ ...x, value: { tag: "zero" } })),
+    ...f.inits
+  ];
+  const assignFields: Array<AST.Stmt<Annotation>> = fields.map(x => ({
+    tag: "field-assign",
+    obj: { tag: "id", name: "self", a: { type } },
+    field: x.name,
+    value: { tag: "id", name: x.name, a: { type: x.type } }
+  }));
+
+  var childDefs = f.children.map(x => lowerFunDef(x, env, [f, ...ancestors]));
+  var assignClosure: AST.Stmt<Annotation> = { tag: "assign", name: f.name, value: { a: { type }, tag: "construct", name } };
+  var initClosure: AST.VarInit<Annotation> = { name: f.name, type, value: { tag: "none" } };
+
+  env.classes.set(name, new Map(fields.map((x, i) => [x.name, [i, { tag: "none" }]])));
+
   return [
-    [{
-      name,
-      fields: [],
-      methods: [
-        {
-          name: "__init__",
-          parameters: [self],
-          ret: f.ret,
-          inits: [],
-          body: [],
-          nonlocals: [],
-          children: []
-        },
-        {
-          ...f,
-          name: APPLY,
-          parameters: [self, ...f.parameters],
-          inits: [varInit, ...defs.map(x => x[1]), ...f.inits],
-          body: [assignStmt, ...defs.map(x => x[2]), ...f.body]
-        }
-      ],
-      typeParams: []
-    }, ...defs.map(x => x[0]).flat()],
-    varInit,
-    assignStmt
+    [
+      {
+        name,
+        fields,
+        methods: [
+          {
+            name: "__init__",
+            parameters: [self],
+            ret: type,
+            inits: [],
+            body: [],
+            nonlocals: [],
+            children: []
+          },
+          {
+            name: APPLY,
+            parameters: [self, ...f.parameters],
+            ret: f.ret,
+            inits: [initClosure, ...childDefs.map(x => x[1]), ...f.inits],
+            body: [...assignFields, assignClosure, ...childDefs.map(x => x[2]), ...f.body],
+            nonlocals: [],
+            children: []
+          }
+        ],
+        typeParams: []
+      },
+      ...childDefs.map(x => x[0]).flat()],
+    initClosure,
+    assignClosure
   ];
 }
 
